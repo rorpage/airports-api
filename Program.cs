@@ -4,6 +4,9 @@ using Microsoft.OpenApi.Models;
 using System.Text.Json.Serialization;
 using AirportsApi.Repository;
 
+const string appName = "Airports API";
+const string defaultRoute = "/";
+
 var builder = WebApplication.CreateBuilder(args);
 
 var databaseConnectionString = builder.Configuration.GetConnectionString("AirportsDatabase");
@@ -21,7 +24,7 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "Airports API",
+        Title = appName,
         Description = "Airport data from OurAirports!",
         Version = "v1"
     });
@@ -32,7 +35,31 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Airports API V1");
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", $"{appName} v1");
+});
+
+var authKeyValue = builder.Configuration.GetValue<string>("AuthKey");
+
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.Equals(defaultRoute)) { await next(context); return; }
+
+    var authKey = context.Request.Headers["x-auth-key"];
+
+    if (string.IsNullOrEmpty(authKey) || authKey != authKeyValue)
+    {
+        context.Response.StatusCode = 401;
+        await context.Response.WriteAsync("Invalid auth key");
+
+        return;
+    }
+
+    await next(context);
+});
+
+app.MapGet(defaultRoute, () =>
+{
+    return appName;
 });
 
 app.MapGet("/api/airports/{id}", (AirportsContext db, string id) =>
